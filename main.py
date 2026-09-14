@@ -26,22 +26,32 @@ def get_new_access_token():
     return result.get("access_token")
 
 def send_kakao_message(header, description, link, access_token):
-    """카카오톡 '나에게 보내기'로 말머리, 요약 본문, 원문 링크가 포함된 메시지를 전송합니다."""
+    """카카오톡 '나에게 보내기' 피드(Feed) 템플릿을 사용하여 
+    제목, 상세 설명, 원문 링크 버튼이 포함된 카드 형태로 메시지를 전송합니다."""
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
-    # 2026년 최신 텍스트 템플릿 규격 반영: 본문 내에 상세 내용과 원문 링크 URL을 함께 구성
-    full_text = f"{header}\n\n{description}\n\n🔗 원문 링크:\n{link}"
-    
+    # 피드 템플릿(object_type="feed") 규격 적용
     data = {
         "template_object": json.dumps({
-            "object_type": "text",
-            "text": full_text,
-            "link": {
-                "web_url": link,
-                "mobile_web_url": link
+            "object_type": "feed",
+            "content": {
+                "title": header,              # 카드 상단 제목 (말머리 + 키워드)
+                "description": description,   # 상세 설명 및 요약 내용
+                "link": {
+                    "web_url": link,
+                    "mobile_web_url": link
+                }
             },
-            "button_title": "원문 바로가기"
+            "buttons": [
+                {
+                    "title": "원문 보러 가기",
+                    "link": {
+                        "web_url": link,
+                        "mobile_web_url": link
+                    }
+                }
+            ]
         })
     }
     response = requests.post(url, headers=headers, data=data)
