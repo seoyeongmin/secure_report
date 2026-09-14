@@ -142,7 +142,7 @@ def check_security_news(access_token):
 
 # 3. 개인정보보호위원회(PIPC) 체크 (N 제거 및 정제 적용)
 def check_pipc(access_token):
-    KEYWORDS = ["고시", "지침", "가이드라인", "법령", "제정", "개정", "처분", "안전조치"]
+    KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
