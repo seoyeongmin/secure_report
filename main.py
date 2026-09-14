@@ -25,14 +25,22 @@ def get_new_access_token():
     result = response.json()
     return result.get("access_token")
 
-def send_kakao_message(text, link, access_token):
+def send_kakao_message(header, description, link, access_token):
+    """카카오톡 '나에게 보내기'로 말머리, 요약 본문, 원문 링크가 포함된 메시지를 전송합니다."""
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
+    
+    # 텍스트 구조 내에 제목/말머리와 본문 요약, 링크 버튼 연동
+    full_text = f"{header}\n\n{description}"
+    
     data = {
         "template_object": json.dumps({
             "object_type": "text",
-            "text": text,
-            "link": {"web_url": link, "mobile_web_url": link},
+            "text": full_text,
+            "link": {
+                "web_url": link,
+                "mobile_web_url": link
+            },
             "button_title": "원문 보러 가기"
         })
     }
@@ -64,6 +72,9 @@ def check_kisa(access_token):
         
         title = post.text.strip()
         link = "https://www.kisa.or.kr" + post['href']
+        
+        # KISA 게시판의 경우 부가 설명이나 날짜를 추가로 파싱할 수 있습니다 (여기서는 제목 기반 구성)
+        description = f"📌 [신규 가이드라인 등록]\n{title}"
 
         last_title = ""
         if os.path.exists(KISA_FILE):
@@ -71,8 +82,8 @@ def check_kisa(access_token):
                 last_title = f.read().strip()
 
         if title != last_title:
-            msg = f"📋 [KISA 가이드라인 신규]\n\n{title}"
-            send_kakao_message(msg, link, access_token)
+            header = "📋 [KISA 가이드라인 알림]"
+            send_kakao_message(header, description, link, access_token)
             log_history("KISA", title)
             with open(KISA_FILE, "w", encoding="utf-8") as f:
                 f.write(title)
@@ -82,7 +93,7 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (보안뉴스 전용 키워드 적용)
+# 2. 보안뉴스 체크 (키워드 매칭 및 본문 요약 구성)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
     url = "https://www.boannews.com/media/list.asp?kind=1"
@@ -105,13 +116,19 @@ def check_security_news(access_token):
             title = a_tag.text.strip()
             link = "https://www.boannews.com/media/" + a_tag['href']
 
+            # 기사 요약(sub-text) 영역이 있다면 함께 가져옴
+            sub_txt = item.select_one('.news_sub')
+            summary = sub_txt.text.strip() if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
+
             if title == last_news:
                 break
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
-                msg = f"🚨 [보안뉴스 ({matched_keyword})]\n\n{title}"
-                send_kakao_message(msg, link, access_token)
+                header = f"🚨 [보안뉴스 매칭: {matched_keyword}]"
+                description = f"기사 제목: {title}\n\n[요약]\n{summary}"
+                
+                send_kakao_message(header, description, link, access_token)
                 log_history("보안뉴스", title)
                 print(f"✅ 보안뉴스 전송 [{matched_keyword}]: {title}")
                 
@@ -123,9 +140,9 @@ def check_security_news(access_token):
     except Exception as e:
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
 
-# 3. 개인정보보호위원회(PIPC) 체크 (PIPC 전용 키워드 적용)
+# 3. 개인정보보호위원회(PIPC) 체크 (키워드 매칭 및 상세 구성)
 def check_pipc(access_token):
-    KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령"]
+    KEYWORDS = ["고시", "지침", "가이드라인", "법령", "제정", "개정", "처분", "안전조치"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -153,8 +170,10 @@ def check_pipc(access_token):
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
-                msg = f"🏛️ [개인정보보호위원회 ({matched_keyword})]\n\n{title}"
-                send_kakao_message(msg, link, access_token)
+                header = f"🏛️ [개인정보보호위원회: {matched_keyword}]"
+                description = f"안건/공고 명칭:\n{title}"
+                
+                send_kakao_message(header, description, link, access_token)
                 log_history("PIPC", title)
                 print(f"✅ PIPC 전송 [{matched_keyword}]: {title}")
                 
@@ -172,7 +191,7 @@ def main():
         print("❌ 액세스 토큰 갱신 실패")
         return
 
-    print("--- 3대 보안 소스 봇 실행 시작 ---")
+    print("--- 3대 보안 소스 봇 실행 시작 (링크 및 요약 강화 버전) ---")
     check_kisa(access_token)
     check_security_news(access_token)
     check_pipc(access_token)
