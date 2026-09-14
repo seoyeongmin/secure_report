@@ -2,8 +2,11 @@ name: KISA Guideline Bot
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 한국 시간 오전 9시 실행 (UTC 기준 0시)
-  workflow_dispatch: # 수동 실행 버튼
+    - cron: '0 22 * * *'    # 한국 시간 오전 7시 00분
+    - cron: '30 0 * * *'    # 한국 시간 오전 9시 30분
+    - cron: '0 5 * * *'     # 한국 시간 오후 2시 00분
+    - cron: '0 8 * * *'     # 한국 시간 오후 5시 00분
+  workflow_dispatch:        # 수동 실행 버튼 유지
 
 jobs:
   run-bot:
@@ -32,6 +35,6 @@ jobs:
       run: |
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        git add last_kisa_post.txt
-        git commit -m "Update last post record" || echo "No changes to commit"
+        git add last_kisa_post.txt last_news_post.txt last_pipc_post.txt alert_history.txt
+        git commit -m "Update post records and history" || echo "No changes to commit"
         git push
