@@ -32,7 +32,7 @@ def send_kakao_message(header, description, link, access_token):
     headers = {"Authorization": f"Bearer {access_token}"}
     
     # 텍스트 내부에 구분선, 전체 상세 설명, 원문 링크를 명확히 구성
-    full_text = f"━━━━━━━━━━━━━━━━━━━\n{header}\n━━━━━━━━━━━━━━━━━━━\n\n{description}\n\n🔗 [원문 바로가기]\n{link}"
+    full_text = f"━━━━━━━━━━━━━━━━\n{header}\n━━━━━━━━━━━━━━━━\n\n{description}\n\n🔗 [원문 바로가기]\n{link}"
     
     data = {
         "template_object": json.dumps({
