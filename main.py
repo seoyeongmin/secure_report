@@ -30,8 +30,8 @@ def send_kakao_message(header, description, link, access_token):
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
-    # 텍스트 구조 내에 제목/말머리와 본문 요약, 링크 버튼 연동
-    full_text = f"{header}\n\n{description}"
+    # 2026년 최신 텍스트 템플릿 규격 반영: 본문 내에 상세 내용과 원문 링크 URL을 함께 구성
+    full_text = f"{header}\n\n{description}\n\n🔗 원문 링크:\n{link}"
     
     data = {
         "template_object": json.dumps({
@@ -41,11 +41,12 @@ def send_kakao_message(header, description, link, access_token):
                 "web_url": link,
                 "mobile_web_url": link
             },
-            "button_title": "원문 보러 가기"
+            "button_title": "원문 바로가기"
         })
     }
-    requests.post(url, headers=headers, data=data)
-
+    response = requests.post(url, headers=headers, data=data)
+    return response.json()
+    
 def log_history(category, title):
     """전송된 알림 내역을 히스토리 파일에 기록합니다."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
