@@ -2,27 +2,17 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import os
+from datetime import datetime
 
-# GitHub Secrets에서 키와 토큰을 불러옵니다.
+# GitHub Secrets에서 키와 토큰 불러오기
 REST_API_KEY = os.environ.get("KAKAO_REST_API_KEY")
 REFRESH_TOKEN = os.environ.get("KAKAO_REFRESH_TOKEN")
 
-KISA_URL = "https://www.kisa.or.kr/2060207"
-LAST_POST_FILE = "last_kisa_post.txt"
-
-def get_latest_post():
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
-    }
-    response = requests.get(KISA_URL, headers=headers, verify=False)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    post_element = soup.select_one('tbody tr td.left a') 
-    if post_element:
-        title = post_element.text.strip()
-        link = "https://www.kisa.or.kr" + post_element['href']
-        return title, link
-    return None, None
+# 파일 경로 설정 (사이트별 중복 방지 기록 파일)
+KISA_FILE = "last_kisa_post.txt"
+NEWS_FILE = "last_news_post.txt"
+PIPC_FILE = "last_pipc_post.txt"
+HISTORY_FILE = "alert_history.txt"
 
 def get_new_access_token():
     url = "https://kauth.kakao.com/oauth/token"
@@ -43,37 +33,150 @@ def send_kakao_message(text, link, access_token):
             "object_type": "text",
             "text": text,
             "link": {"web_url": link, "mobile_web_url": link},
-            "button_title": "가이드라인 원문 보기"
+            "button_title": "원문 보러 가기"
         })
     }
     requests.post(url, headers=headers, data=data)
 
+def log_history(category, title):
+    """전송된 알림 내역을 히스토리 파일에 기록합니다."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{now}] [{category}] {title}\n"
+    
+    history_content = ""
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            history_content = f.read()
+            
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        f.write(log_entry + history_content)
+
+# 1. KISA 가이드라인 체크
+def check_kisa(access_token):
+    url = "https://www.kisa.or.kr/2060207"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        post = soup.select_one('tbody tr td.left a')
+        if not post:
+            return
+        
+        title = post.text.strip()
+        link = "https://www.kisa.or.kr" + post['href']
+
+        last_title = ""
+        if os.path.exists(KISA_FILE):
+            with open(KISA_FILE, "r", encoding="utf-8") as f:
+                last_title = f.read().strip()
+
+        if title != last_title:
+            msg = f"📋 [KISA 가이드라인 신규]\n\n{title}"
+            send_kakao_message(msg, link, access_token)
+            log_history("KISA", title)
+            with open(KISA_FILE, "w", encoding="utf-8") as f:
+                f.write(title)
+            print(f"✅ KISA 알림 전송: {title}")
+        else:
+            print("ℹ️ KISA 신규 게시물 없음")
+    except Exception as e:
+        print(f"❌ KISA 확인 중 에러: {e}")
+
+# 2. 보안뉴스 체크 (보안뉴스 전용 키워드 적용)
+def check_security_news(access_token):
+    KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
+    url = "https://www.boannews.com/media/list.asp?kind=1"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        news_items = soup.select('.news_txt')
+        
+        last_news = ""
+        if os.path.exists(NEWS_FILE):
+            with open(NEWS_FILE, "r", encoding="utf-8") as f:
+                last_news = f.read().strip()
+
+        for item in news_items:
+            a_tag = item.select_one('a')
+            if not a_tag:
+                continue
+            title = a_tag.text.strip()
+            link = "https://www.boannews.com/media/" + a_tag['href']
+
+            if title == last_news:
+                break
+
+            matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
+            if matched_keyword:
+                msg = f"🚨 [보안뉴스 ({matched_keyword})]\n\n{title}"
+                send_kakao_message(msg, link, access_token)
+                log_history("보안뉴스", title)
+                print(f"✅ 보안뉴스 전송 [{matched_keyword}]: {title}")
+                
+                with open(NEWS_FILE, "w", encoding="utf-8") as f:
+                    f.write(title)
+                break
+        else:
+            print("ℹ️ 조건에 맞는 새로운 보안뉴스 없음")
+    except Exception as e:
+        print(f"❌ 보안뉴스 확인 중 에러: {e}")
+
+# 3. 개인정보보호위원회(PIPC) 체크 (PIPC 전용 키워드 적용)
+def check_pipc(access_token):
+    KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령"]
+    url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, headers=headers, verify=False)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.text, 'html.parser')
+        posts = soup.select('tbody tr')
+        
+        last_pipc = ""
+        if os.path.exists(PIPC_FILE):
+            with open(PIPC_FILE, "r", encoding="utf-8") as f:
+                last_pipc = f.read().strip()
+
+        for row in posts:
+            a_tag = row.select_one('td.left a') or row.select_one('a')
+            if not a_tag:
+                continue
+            
+            title = a_tag.text.strip()
+            href = a_tag.get('href', '#')
+            link = "https://pipc.go.kr" + href if href.startswith('/') else href
+
+            if title == last_pipc:
+                break
+
+            matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
+            if matched_keyword:
+                msg = f"🏛️ [개인정보보호위원회 ({matched_keyword})]\n\n{title}"
+                send_kakao_message(msg, link, access_token)
+                log_history("PIPC", title)
+                print(f"✅ PIPC 전송 [{matched_keyword}]: {title}")
+                
+                with open(PIPC_FILE, "w", encoding="utf-8") as f:
+                    f.write(title)
+                break
+        else:
+            print("ℹ️ 조건에 맞는 새로운 PIPC 게시물 없음")
+    except Exception as e:
+        print(f"❌ PIPC 확인 중 에러: {e}")
+
 def main():
-    title, link = get_latest_post()
-    if not title:
-        print("게시물 수집 실패")
+    access_token = get_new_access_token()
+    if not access_token:
+        print("❌ 액세스 토큰 갱신 실패")
         return
 
-    # 중복 알림 방지 확인
-    if os.path.exists(LAST_POST_FILE):
-        with open(LAST_POST_FILE, "r", encoding="utf-8") as f:
-            last_title = f.read().strip()
-        if title == last_title:
-            print("새로운 게시물이 없습니다.")
-            return
-
-    # 새 글일 경우 토큰 갱신 및 메시지 발송
-    access_token = get_new_access_token()
-    if access_token:
-        summary_text = f"📋 [KISA 신규 가이드라인]\n\n{title}"
-        send_kakao_message(summary_text, link, access_token)
-        
-        # 발송 완료 후 새 제목을 텍스트 파일에 덮어쓰기
-        with open(LAST_POST_FILE, "w", encoding="utf-8") as f:
-            f.write(title)
-        print(f"✅ 알림 전송 및 기록 완료: {title}")
-    else:
-        print("❌ 액세스 토큰 발급 실패")
+    print("--- 3대 보안 소스 봇 실행 시작 ---")
+    check_kisa(access_token)
+    check_security_news(access_token)
+    check_pipc(access_token)
+    print("--- 3대 보안 소스 봇 실행 완료 ---")
 
 if __name__ == "__main__":
     main()
