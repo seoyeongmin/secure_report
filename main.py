@@ -26,18 +26,17 @@ def get_new_access_token():
     return result.get("access_token")
 
 def send_kakao_message(header, description, link, access_token):
-    """카카오톡 '나에게 보내기' 피드(Feed) 템플릿을 사용하여 
-    제목, 상세 설명, 원문 링크 버튼이 포함된 카드 형태로 메시지를 전송합니다."""
+    """카카오톡 '나에게 보내기' 피드(Feed) 템플릿 전송 함수"""
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
-    # 피드 템플릿(object_type="feed") 규격 적용
+    # 피드 템플릿 구조 (버튼과 링크 명시)
     data = {
         "template_object": json.dumps({
             "object_type": "feed",
             "content": {
-                "title": header,              # 카드 상단 제목 (말머리 + 키워드)
-                "description": description,   # 상세 설명 및 요약 내용
+                "title": header,
+                "description": description,
                 "link": {
                     "web_url": link,
                     "mobile_web_url": link
@@ -56,9 +55,8 @@ def send_kakao_message(header, description, link, access_token):
     }
     response = requests.post(url, headers=headers, data=data)
     return response.json()
-    
+
 def log_history(category, title):
-    """전송된 알림 내역을 히스토리 파일에 기록합니다."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{now}] [{category}] {title}\n"
     
@@ -81,10 +79,8 @@ def check_kisa(access_token):
         if not post:
             return
         
-        title = post.text.strip()
+        title = post.text.strip().replace('N', '').strip()
         link = "https://www.kisa.or.kr" + post['href']
-        
-        # KISA 게시판의 경우 부가 설명이나 날짜를 추가로 파싱할 수 있습니다 (여기서는 제목 기반 구성)
         description = f"📌 [신규 가이드라인 등록]\n{title}"
 
         last_title = ""
@@ -93,7 +89,7 @@ def check_kisa(access_token):
                 last_title = f.read().strip()
 
         if title != last_title:
-            header = "📋 [KISA 가이드라인 알림]"
+            header = "📋 KISA 가이드라인 알림"
             send_kakao_message(header, description, link, access_token)
             log_history("KISA", title)
             with open(KISA_FILE, "w", encoding="utf-8") as f:
@@ -104,7 +100,7 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (키워드 매칭 및 본문 요약 구성)
+# 2. 보안뉴스 체크
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
     url = "https://www.boannews.com/media/list.asp?kind=1"
@@ -124,10 +120,9 @@ def check_security_news(access_token):
             a_tag = item.select_one('a')
             if not a_tag:
                 continue
-            title = a_tag.text.strip()
+            title = a_tag.text.strip().replace('N', '').strip()
             link = "https://www.boannews.com/media/" + a_tag['href']
 
-            # 기사 요약(sub-text) 영역이 있다면 함께 가져옴
             sub_txt = item.select_one('.news_sub')
             summary = sub_txt.text.strip() if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
 
@@ -136,8 +131,8 @@ def check_security_news(access_token):
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
-                header = f"🚨 [보안뉴스 매칭: {matched_keyword}]"
-                description = f"기사 제목: {title}\n\n[요약]\n{summary}"
+                header = f"🚨 보안뉴스 ({matched_keyword})"
+                description = f"{title}\n\n[요약]\n{summary}"
                 
                 send_kakao_message(header, description, link, access_token)
                 log_history("보안뉴스", title)
@@ -151,7 +146,7 @@ def check_security_news(access_token):
     except Exception as e:
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
 
-# 3. 개인정보보호위원회(PIPC) 체크 (키워드 매칭 및 상세 구성)
+# 3. 개인정보보호위원회(PIPC) 체크
 def check_pipc(access_token):
     KEYWORDS = ["고시", "지침", "가이드라인", "법령", "제정", "개정", "처분", "안전조치"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
@@ -172,7 +167,8 @@ def check_pipc(access_token):
             if not a_tag:
                 continue
             
-            title = a_tag.text.strip()
+            # 텍스트 추출 후 불필요한 'N' 마크 제거
+            title = a_tag.text.strip().replace('N', '').strip()
             href = a_tag.get('href', '#')
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
 
@@ -181,8 +177,8 @@ def check_pipc(access_token):
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
-                header = f"🏛️ [개인정보보호위원회: {matched_keyword}]"
-                description = f"안건/공고 명칭:\n{title}"
+                header = f"🏛️ 개인정보보호위원회 ({matched_keyword})"
+                description = f"{title}"
                 
                 send_kakao_message(header, description, link, access_token)
                 log_history("PIPC", title)
@@ -202,7 +198,7 @@ def main():
         print("❌ 액세스 토큰 갱신 실패")
         return
 
-    print("--- 3대 보안 소스 봇 실행 시작 (링크 및 요약 강화 버전) ---")
+    print("--- 3대 보안 소스 봇 실행 시작 (피드 템플릿 최적화 버전) ---")
     check_kisa(access_token)
     check_security_news(access_token)
     check_pipc(access_token)
