@@ -206,5 +206,5 @@ def main():
     check_pipc(access_token)
     print("--- 3대 보안 소스 봇 실행 완료 ---")
 
-vif __name__ == "__main__":
+if __name__ == "__main__":
     main()
