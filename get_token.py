@@ -1,21 +1,19 @@
 import requests
 
-AUTH_CODE = "Skix7pBeTSaf90OHSAzmW29QyXMKX4XbgK4DjvOvBBBnC8ryoHlz5gAAAAQKDR-XAAABoJ4Xg2Iq3eF1vjqPRg"
+REST_API_KEY = "YOUR_REST_API_KEY"
+REDIRECT_URI = "https://localhost"
+AUTHORIZATION_CODE = "YOUR_AUTHORIZATION_CODE"  # 카카오 로그인 후 발급받은 인가 코드
 
-url = "https://kauth.kakao.com/oauth/token"
-data = {
-    "grant_type": "authorization_code",
-    "client_id": "f5b645ac0ad7d128fe49ba8a16dfcd42",
-    "redirect_uri": "http://localhost:3000",
-    "code": AUTH_CODE
-}
+def get_refresh_token():
+    url = "[https://kauth.kakao.com/oauth/token](https://kauth.kakao.com/oauth/token)"
+    data = {
+        "grant_type": "authorization_code",
+        "client_id": REST_API_KEY,
+        "redirect_uri": REDIRECT_URI,
+        "code": AUTHORIZATION_CODE
+    }
+    response = requests.post(url, data=data)
+    print(response.json())
 
-response = requests.post(url, data=data)
-result = response.json()
-
-print("\n=== 발급 결과 ===")
-if "refresh_token" in result:
-    print(f"👉 리프레시 토큰: {result['refresh_token']}\n")
-    print("성공! 이 값을 kisa_test.py의 REFRESH_TOKEN 자리에 넣으세요.")
-else:
-    print(f"❌ 실패 원인: {result}")
+if __name__ == "__main__":
+    get_refresh_token()
