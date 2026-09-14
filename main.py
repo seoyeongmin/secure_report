@@ -25,32 +25,31 @@ def get_new_access_token():
     result = response.json()
     return result.get("access_token")
 
+def clean_text(element):
+    """[공통 함수] BeautifulSoup 요소나 문자열에서 'N' 마크 및 불필요한 공백을 한 번에 제거합니다."""
+    if not element:
+        return ""
+    # 1. 텍스트 추출 및 앞뒤 공백 제거
+    text = element.get_text(strip=True) if hasattr(element, 'get_text') else str(element).strip()
+    # 2. 독립된 'N' 마크나 문자열 내의 불필요한 공백 정제
+    cleaned = text.replace('N', '').strip()
+    return cleaned
+
 def send_kakao_message(header, description, link, access_token):
-    """카카오톡 '나에게 보내기' 피드(Feed) 템플릿 전송 함수"""
+    """카카오톡 '나에게 보내기' 텍스트 템플릿 전송 함수"""
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
-    # 피드 템플릿 구조 (버튼과 링크 명시)
+    full_text = f"━━━━━━━━━━━━━━━━━━━\n{header}\n━━━━━━━━━━━━━━━━━━━\n\n{description}\n\n🔗 [원문 바로가기]\n{link}"
+    
     data = {
         "template_object": json.dumps({
-            "object_type": "feed",
-            "content": {
-                "title": header,
-                "description": description,
-                "link": {
-                    "web_url": link,
-                    "mobile_web_url": link
-                }
-            },
-            "buttons": [
-                {
-                    "title": "원문 보러 가기",
-                    "link": {
-                        "web_url": link,
-                        "mobile_web_url": link
-                    }
-                }
-            ]
+            "object_type": "text",
+            "text": full_text,
+            "link": {
+                "web_url": link,
+                "mobile_web_url": link
+            }
         })
     }
     response = requests.post(url, headers=headers, data=data)
@@ -79,9 +78,10 @@ def check_kisa(access_token):
         if not post:
             return
         
-        title = post.text.strip().replace('N', '').strip()
+        # 공통 함수로 한 번에 정제
+        title = clean_text(post)
         link = "https://www.kisa.or.kr" + post['href']
-        description = f"📌 [신규 가이드라인 등록]\n{title}"
+        description = f"{title}"
 
         last_title = ""
         if os.path.exists(KISA_FILE):
@@ -120,18 +120,20 @@ def check_security_news(access_token):
             a_tag = item.select_one('a')
             if not a_tag:
                 continue
-            title = a_tag.text.strip().replace('N', '').strip()
+            
+            # 공통 함수로 제목 및 요약본문 일괄 정제
+            title = clean_text(a_tag)
             link = "https://www.boannews.com/media/" + a_tag['href']
 
             sub_txt = item.select_one('.news_sub')
-            summary = sub_txt.text.strip() if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
+            summary = clean_text(sub_txt) if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
 
             if title == last_news:
                 break
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
-                header = f"🚨 보안뉴스 ({matched_keyword})"
+                header = f"🚨 보안뉴스 [{matched_keyword}]"
                 description = f"{title}\n\n[요약]\n{summary}"
                 
                 send_kakao_message(header, description, link, access_token)
@@ -167,8 +169,8 @@ def check_pipc(access_token):
             if not a_tag:
                 continue
             
-            # 텍스트 추출 후 불필요한 'N' 마크 제거
-            title = a_tag.text.strip().replace('N', '').strip()
+            # 공통 함수로 한 번에 정제
+            title = clean_text(a_tag)
             href = a_tag.get('href', '#')
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
 
@@ -177,7 +179,7 @@ def check_pipc(access_token):
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
-                header = f"🏛️ 개인정보보호위원회 ({matched_keyword})"
+                header = f"🏛️ 개인정보보호위원회 [{matched_keyword}]"
                 description = f"{title}"
                 
                 send_kakao_message(header, description, link, access_token)
@@ -198,11 +200,11 @@ def main():
         print("❌ 액세스 토큰 갱신 실패")
         return
 
-    print("--- 3대 보안 소스 봇 실행 시작 (피드 템플릿 최적화 버전) ---")
+    print("--- 3대 보안 소스 봇 실행 시작 (공통 정제 함수 적용 버전) ---")
     check_kisa(access_token)
     check_security_news(access_token)
     check_pipc(access_token)
     print("--- 3대 보안 소스 봇 실행 완료 ---")
 
-if __name__ == "__main__":
+vif __name__ == "__main__":
     main()
