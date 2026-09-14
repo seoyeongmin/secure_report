@@ -25,21 +25,13 @@ def get_new_access_token():
     result = response.json()
     return result.get("access_token")
 
-def clean_text(element):
-    """[공통 함수] BeautifulSoup 요소나 문자열에서 'N' 마크 및 불필요한 공백을 한 번에 제거합니다."""
-    if not element:
-        return ""
-    # 1. 텍스트 추출 및 앞뒤 공백 제거
-    text = element.get_text(strip=True) if hasattr(element, 'get_text') else str(element).strip()
-    # 2. 독립된 'N' 마크나 문자열 내의 불필요한 공백 정제
-    cleaned = text.replace('N', '').strip()
-    return cleaned
-
 def send_kakao_message(header, description, link, access_token):
-    """카카오톡 '나에게 보내기' 텍스트 템플릿 전송 함수"""
+    """카카오톡 '나에게 보내기' 텍스트 템플릿을 활용해 
+    상세 내용이 잘리지 않고 원문 링크와 함께 완벽히 출력되도록 전송합니다."""
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
+    # 텍스트 내부에 구분선, 전체 상세 설명, 원문 링크를 명확히 구성
     full_text = f"━━━━━━━━━━━━━━━━━━━\n{header}\n━━━━━━━━━━━━━━━━━━━\n\n{description}\n\n🔗 [원문 바로가기]\n{link}"
     
     data = {
@@ -67,7 +59,7 @@ def log_history(category, title):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         f.write(log_entry + history_content)
 
-# 1. KISA 가이드라인 체크
+# 1. KISA 가이드라인 체크 (N 제거 및 정제 적용)
 def check_kisa(access_token):
     url = "https://www.kisa.or.kr/2060207"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -78,8 +70,8 @@ def check_kisa(access_token):
         if not post:
             return
         
-        # 공통 함수로 한 번에 정제
-        title = clean_text(post)
+        # 텍스트 추출 후 'N' 마크 및 불필요한 공백 제거
+        title = post.get_text(strip=True).replace('N', '').strip()
         link = "https://www.kisa.or.kr" + post['href']
         description = f"{title}"
 
@@ -100,7 +92,7 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크
+# 2. 보안뉴스 체크 (N 제거 및 정제 적용)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
     url = "https://www.boannews.com/media/list.asp?kind=1"
@@ -121,12 +113,12 @@ def check_security_news(access_token):
             if not a_tag:
                 continue
             
-            # 공통 함수로 제목 및 요약본문 일괄 정제
-            title = clean_text(a_tag)
+            # 텍스트 추출 후 'N' 마크 및 공백 정제
+            title = a_tag.get_text(strip=True).replace('N', '').strip()
             link = "https://www.boannews.com/media/" + a_tag['href']
 
             sub_txt = item.select_one('.news_sub')
-            summary = clean_text(sub_txt) if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
+            summary = sub_txt.get_text(strip=True).replace('N', '').strip() if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
 
             if title == last_news:
                 break
@@ -148,7 +140,7 @@ def check_security_news(access_token):
     except Exception as e:
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
 
-# 3. 개인정보보호위원회(PIPC) 체크
+# 3. 개인정보보호위원회(PIPC) 체크 (N 제거 및 정제 적용)
 def check_pipc(access_token):
     KEYWORDS = ["고시", "지침", "가이드라인", "법령", "제정", "개정", "처분", "안전조치"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
@@ -169,8 +161,8 @@ def check_pipc(access_token):
             if not a_tag:
                 continue
             
-            # 공통 함수로 한 번에 정제
-            title = clean_text(a_tag)
+            # 텍스트 추출 후 'N' 마크 및 공백 정제
+            title = a_tag.get_text(strip=True).replace('N', '').strip()
             href = a_tag.get('href', '#')
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
 
@@ -200,7 +192,7 @@ def main():
         print("❌ 액세스 토큰 갱신 실패")
         return
 
-    print("--- 3대 보안 소스 봇 실행 시작 (공통 정제 함수 적용 버전) ---")
+    print("--- 3대 보안 소스 봇 실행 시작 (통합 정제 및 링크 최적화 버전) ---")
     check_kisa(access_token)
     check_security_news(access_token)
     check_pipc(access_token)
