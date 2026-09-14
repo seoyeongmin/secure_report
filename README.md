@@ -53,13 +53,22 @@ API: Kakao Developers REST API (OAuth 2.0 Refresh Token Flow)
  ┃ ┗ 📂 workflows
  ┃   ┗ 📜 main.yml         # GitHub Actions 자동화 워크플로우 설정
  ┣ 📜 main.py               # 메인 크롤링 및 카카오톡 전송 스크립트
+ ┣ 📜 get_token.py          # [초기 세팅] 카카오 리프레시 토큰 발급용 스크립트
+ ┣ 📜 kisa_test.py          # [초기 세팅] 단건 크롤링 및 알림 테스트 스크립트
  ┣ 📜 last_kisa_post.txt    # KISA 중복 방지 기록
  ┣ 📜 last_news_post.txt    # 보안뉴스 중복 방지 기록
  ┣ 📜 last_pipc_post.txt    # PIPC 중복 방지 기록
  ┗ 📜 alert_history.txt     # 전체 알림 발송 히스토리 로그
 ```
 ---
+## 🔧 초기 세팅 및 인증 가이드 (Initial Setup)
+1. 카카오 리프레시 토큰 발급 (get_token.py)
+   - 카카오톡 API를 통해 '나에게 보내기'를 수행하기 위해 최초 1회 인증 코드를 교환하여 Refresh Token을 발급받는 로컬 테스트용 스크립트입니다.
 
+2. 단건 크롤링 & 알림 테스트 (kisa_test.py)
+   - 멀티 소스 확장 전, KISA 가이드라인 크롤링과 카카오톡 전송 기능이 정상 동작하는지 로컬에서 가볍게 검증했던 테스트 스크립트입니다.
+
+---
 ## 💡 주요 트러블슈팅 및 해결 과정 (Troubleshooting)
 Issue 1. 공공기관/보안 사이트 SSL 인증서 검증 에러 (SSL: CERTIFICATE_VERIFY_FAILED)
    - Cause: GitHub Actions(Ubuntu 환경)에서 KISA 등 국내 공공/보안 사이트 접속 시 로컬 인증서 체인 검증에 실패하여 차단되는 현상.
