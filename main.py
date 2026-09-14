@@ -14,7 +14,7 @@ def get_latest_post():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
     }
-    response = requests.get(KISA_URL, headers=headers)
+    response = requests.get(KISA_URL, headers=headers, verify=False)
     soup = BeautifulSoup(response.text, 'html.parser')
     
     post_element = soup.select_one('tbody tr td.left a') 
