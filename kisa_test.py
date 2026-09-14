@@ -1,50 +1,32 @@
 import requests
+from bs4 import BeautifulSoup
 import json
+import os
 
-# --- 1. 초기 설정값 ---
-REST_API_KEY = "f5b645ac0ad7d128fe49ba8a16dfcd42"
-REFRESH_TOKEN = "UfVqWzEJbQRgzgry0DYzS--4vgrzT2yNAAAAAgoNG1kAAAGgnhjE8FXuKbObXTiX"
+REST_API_KEY = os.environ.get("KAKAO_REST_API_KEY")
+REFRESH_TOKEN = os.environ.get("KAKAO_REFRESH_TOKEN")
 
-def get_new_access_token():
-    url = "https://kauth.kakao.com/oauth/token"
+def get_access_token():
+    url = "[https://kauth.kakao.com/oauth/token](https://kauth.kakao.com/oauth/token)"
     data = {
         "grant_type": "refresh_token",
         "client_id": REST_API_KEY,
         "refresh_token": REFRESH_TOKEN
     }
     response = requests.post(url, data=data)
-    result = response.json()
-    
-    if "access_token" in result:
-        return result["access_token"]
-    else:
-        print("❌ 토큰 갱신 실패:", result)
-        return None
+    return response.json().get("access_token")
 
-def send_kakao_message(text, access_token):
-    url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-    data = {
-        "template_object": json.dumps({
-            "object_type": "text",
-            "text": text,
-            "link": {
-                "web_url": "https://www.kisa.or.kr/2060207",
-                "mobile_web_url": "https://www.kisa.or.kr/2060207"
-            },
-            "button_title": "가이드라인 원문 보기"
-        })
-    }
+def test_kisa_crawl():
+    url = "[https://www.kisa.or.kr/2060207](https://www.kisa.or.kr/2060207)"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers, verify=False)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    post = soup.select_one('tbody tr td.left a')
     
-    response = requests.post(url, headers=headers, data=data)
-    if response.status_code == 200:
-        print("✅ 카카오톡 메시지 전송 성공!")
-    else:
-        print("❌ 전송 실패:", response.text)
+    title = post.text.strip()
+    link = "[https://www.kisa.or.kr](https://www.kisa.or.kr)" + post['href']
+    print(f"추출된 제목: {title}")
+    print(f"추출된 링크: {link}")
 
-# --- 2. 실행 테스트 ---
-new_token = get_new_access_token()
-if new_token:
-    send_kakao_message("📋 [KISA 신규 가이드라인 알림 테스트]", new_token)
+if __name__ == "__main__":
+    test_kisa_crawl()
