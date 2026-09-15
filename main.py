@@ -158,11 +158,13 @@ def check_security_news(access_token):
 
 # 3. 개인정보보호위원회(PIPC) 체크
 def check_pipc(access_token):
+    print("🔍 PIPC 함수 진입 시도...") # 이 로그가 찍히는지 확인
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers, verify=False, timeout=10)
+        print(f"🔍 PIPC 응답 코드: {response.status_code}") # 응답이 오는지 확인
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
