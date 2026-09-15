@@ -93,15 +93,19 @@ def check_kisa(access_token):
         print(f"❌ KISA 확인 중 에러: {e}")
 
 # 2. 보안뉴스 체크 (N 제거 및 정제 적용)
+# 보안뉴스 체크 (최신 URL 및 셀렉터 반영 버전)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    url = "https://www.boannews.com/news/articleList.html?view_type=sm"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # 보안뉴스 최신 리스트 페이지 주소로 변경
+    url = "https://www.boannews.com/media/t_list.asp"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     try:
         response = requests.get(url, headers=headers, verify=False)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        news_items = soup.select('.news_txt')
+        
+        # 보안뉴스 최신 목록 태그 구조(.news_list)
+        news_items = soup.select('.news_list')
         
         last_news = ""
         if os.path.exists(NEWS_FILE):
@@ -109,16 +113,25 @@ def check_security_news(access_token):
                 last_news = f.read().strip()
 
         for item in news_items:
+            # 제목 및 링크가 들어있는 a 태그 추출
             a_tag = item.select_one('a')
             if not a_tag:
                 continue
             
-            # 텍스트 추출 후 'N' 마크 및 공백 정제
-            title = a_tag.get_text(strip=True).replace('N', '').strip()
-            link = "https://www.boannews.com/media/" + a_tag['href']
+            # span.news_txt 안의 텍스트가 순수 제목
+            txt_span = item.select_one('span.news_txt')
+            if not txt_span:
+                continue
+                
+            title = clean_text(txt_span)
+            
+            # 상대 경로를 절대 경로로 변환
+            href = a_tag.get('href', '')
+            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
 
-            sub_txt = item.select_one('.news_sub')
-            summary = sub_txt.get_text(strip=True).replace('N', '').strip() if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
+            # 요약 부가 텍스트
+            sub_txt = item.select_one('span.news_sub') # 또는 작성자/요약 영역
+            summary = clean_text(sub_txt) if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
 
             if title == last_news:
                 break
@@ -139,7 +152,7 @@ def check_security_news(access_token):
             print("ℹ️ 조건에 맞는 새로운 보안뉴스 없음")
     except Exception as e:
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
-
+        
 # 3. 개인정보보호위원회(PIPC) 체크 (N 제거 및 정제 적용)
 def check_pipc(access_token):
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
