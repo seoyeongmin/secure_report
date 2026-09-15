@@ -68,7 +68,7 @@ def log_history(category, title):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         f.write(log_entry + history_content)
 
-# 1. KISA 가이드라인 체크 (리스트 순회 방식으로 변경)
+# 1. KISA 가이드라인 체크
 def check_kisa(access_token):
     url = "https://www.kisa.or.kr/2060207"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -97,6 +97,7 @@ def check_kisa(access_token):
             description = f"{title}"
 
             if title == last_title:
+                print("ℹ️ [KISA] 이미 발송된 최신 게시물과 동일하여 메시지를 전송하지 않습니다.")
                 break
 
             header = "📋 KISA 가이드라인 알림"
@@ -111,7 +112,7 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (리스트 순회 및 키워드 매칭 방식 유지)
+# 2. 보안뉴스 체크 (안정적인 a[href*="view.asp"] 구조로 통합 개선)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
     url = "https://www.boannews.com/media/list.asp?kind=1"
@@ -120,9 +121,26 @@ def check_security_news(access_token):
         response = requests.get(url, headers=headers, verify=False, timeout=10)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        news_items = soup.select('.news_txt')
         
-        if not news_items:
+        # 유연하고 확실하게 기사 링크를 수집
+        articles = []
+        for a in soup.select('a[href*="view.asp"]'):
+            title = clean_text(a)
+            href = a.get('href', '')
+            if not title or len(title) < 5:
+                continue
+            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
+            articles.append((title, link))
+
+        # 중복 제거
+        seen_titles = set()
+        unique_articles = []
+        for t, l in articles:
+            if t not in seen_titles:
+                seen_titles.add(t)
+                unique_articles.append((t, l))
+
+        if not unique_articles:
             print("ℹ️ 보안뉴스 목록을 찾지 못했습니다.")
             return
 
@@ -131,25 +149,15 @@ def check_security_news(access_token):
             with open(NEWS_FILE, "r", encoding="utf-8") as f:
                 last_news = f.read().strip()
 
-        for item in news_items:
-            a_tag = item.select_one('a')
-            if not a_tag:
-                continue
-            
-            title = clean_text(a_tag)
-            href = a_tag.get('href', '')
-            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
-
-            sub_txt = item.select_one('.news_sub')
-            summary = clean_text(sub_txt) if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
-
+        for title, link in unique_articles:
             if title == last_news:
+                print("ℹ️ [보안뉴스] 이미 발송된 최신 기사와 동일하여 메시지를 전송하지 않습니다.")
                 break
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
                 header = f"🚨 보안뉴스 [{matched_keyword}]"
-                description = f"{title}\n\n[요약]\n{summary}"
+                description = f"{title}\n\n[상세 내용 및 본문은 원문 링크를 참고하세요]"
                 
                 send_kakao_message(header, description, link, access_token)
                 log_history("보안뉴스", title)
@@ -193,6 +201,7 @@ def check_pipc(access_token):
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
 
             if title == last_pipc:
+                print("ℹ️ [PIPC] 이미 발송된 최신 게시물과 동일하여 메시지를 전송하지 않습니다.")
                 break
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
