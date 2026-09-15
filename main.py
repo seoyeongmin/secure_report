@@ -95,7 +95,7 @@ def check_kisa(access_token):
 # 2. 보안뉴스 체크 (N 제거 및 정제 적용)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    url = "https://www.boannews.com/media/list.asp?kind=1"
+    url = "https://www.boannews.com/news/articleList.html?view_type=sm"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers, verify=False)
