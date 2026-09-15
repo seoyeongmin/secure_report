@@ -216,12 +216,29 @@ def check_security_news(access_token):
     except Exception as e:
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
 
-# 3. 개인정보보호위원회(PIPC) 체크
+# 3. 개인정보보호위원회(PIPC) 체크 (재시도 로직 추가 버전)
 def check_pipc(access_token):
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
+    
+    response = None
+    # 방화벽 간헐적 차단에 대응하기 위해 최대 3번까지 재시도
+    for attempt in range(3):
+        try:
+            response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
+            if response.status_code == 200:
+                break
+        except Exception:
+            if attempt == 2:
+                print("❌ PIPC 확인 중 에러: 연결 시도 3회 모두 실패 (타임아웃)")
+                return
+            continue
+
+    if not response or response.status_code != 200:
+        print("ℹ️ PIPC 서버 응급 응답 없음")
+        return
+
     try:
-        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
@@ -263,7 +280,7 @@ def check_pipc(access_token):
         else:
             print("ℹ️ 조건에 맞는 새로운 PIPC 게시물 없음")
     except Exception as e:
-        print(f"❌ PIPC 확인 중 에러: {e}")
+        print(f"❌ PIPC 파싱 중 에러: {e}")
 
 def main():
     access_token = get_new_access_token()
