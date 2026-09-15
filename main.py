@@ -3,6 +3,10 @@ from bs4 import BeautifulSoup
 import json
 import os
 from datetime import datetime
+import urllib3
+
+# SSL 경고 무시 설정 (보안 공공기관 사이트 접속 시 발생할 수 있는 경고 방지)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # GitHub Secrets에서 키와 토큰 불러오기
 REST_API_KEY = os.environ.get("KAKAO_REST_API_KEY")
@@ -25,13 +29,18 @@ def get_new_access_token():
     result = response.json()
     return result.get("access_token")
 
+def clean_text(element):
+    """[공통 함수] BeautifulSoup 요소나 문자열에서 'N' 마크 및 불필요한 공백을 제거합니다."""
+    if not element:
+        return ""
+    text = element.get_text(strip=True) if hasattr(element, 'get_text') else str(element).strip()
+    return text.replace('N', '').strip()
+
 def send_kakao_message(header, description, link, access_token):
-    """카카오톡 '나에게 보내기' 텍스트 템플릿을 활용해 
-    상세 내용이 잘리지 않고 원문 링크와 함께 완벽히 출력되도록 전송합니다."""
+    """카카오톡 '나에게 보내기' 텍스트 템플릿 전송 함수"""
     url = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
     headers = {"Authorization": f"Bearer {access_token}"}
     
-    # 텍스트 내부에 구분선, 전체 상세 설명, 원문 링크를 명확히 구성
     full_text = f"━━━━━━━━━━━━━━━━\n{header}\n━━━━━━━━━━━━━━━━\n\n{description}\n\n🔗 [원문 바로가기]\n{link}"
     
     data = {
@@ -59,20 +68,21 @@ def log_history(category, title):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         f.write(log_entry + history_content)
 
-# 1. KISA 가이드라인 체크 (N 제거 및 정제 적용)
+# 1. KISA 가이드라인 체크
 def check_kisa(access_token):
     url = "https://www.kisa.or.kr/2060207"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers, verify=False)
+        response = requests.get(url, headers=headers, verify=False, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         post = soup.select_one('tbody tr td.left a')
         if not post:
+            print("ℹ️ KISA 게시물을 찾지 못했습니다.")
             return
         
-        # 텍스트 추출 후 'N' 마크 및 불필요한 공백 제거
-        title = post.get_text(strip=True).replace('N', '').strip()
-        link = "https://www.kisa.or.kr" + post['href']
+        title = clean_text(post)
+        href = post.get('href', '')
+        link = "https://www.kisa.or.kr" + href if href.startswith('/') else href
         description = f"{title}"
 
         last_title = ""
@@ -92,25 +102,21 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (N 제거 및 정제 적용)
-# 보안뉴스 체크 (메인 페이지 및 주요 기사 영역 통합 파싱 버전)
+# 2. 보안뉴스 체크
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    # 메인 페이지와 리스트 페이지 모두에서 기사를 수집할 수 있도록 메인 URL로 변경하거나 리스트 전체를 포괄
     url = "https://www.boannews.com/"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     try:
-        response = requests.get(url, headers=headers, verify=False)
+        response = requests.get(url, headers=headers, verify=False, timeout=10)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 보안뉴스 메인 및 서브 페이지에 존재하는 모든 기사 링크와 텍스트를 포괄적으로 탐색
-        # a 태그 중 기사 링크 패턴(/media/view.asp 등)을 가진 모든 요소를 수집
         articles = []
         for a in soup.select('a[href*="view.asp"]'):
             title = clean_text(a)
             href = a.get('href', '')
-            if not title or len(title) < 5:  # 너무 짧은 텍스트 제외
+            if not title or len(title) < 5:
                 continue
             
             link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
@@ -131,7 +137,7 @@ def check_security_news(access_token):
 
         for title, link in unique_articles:
             if title == last_news:
-                break  # 이미 확인한 최신 기사 만나면 중단
+                break
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
@@ -144,19 +150,19 @@ def check_security_news(access_token):
                 
                 with open(NEWS_FILE, "w", encoding="utf-8") as f:
                     f.write(title)
-                break  # 한 번에 하나의 가장 최신 매칭 기사만 전송
+                break
         else:
             print("ℹ️ 조건에 맞는 새로운 보안뉴스 없음")
     except Exception as e:
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
-        
-# 3. 개인정보보호위원회(PIPC) 체크 (N 제거 및 정제 적용)
+
+# 3. 개인정보보호위원회(PIPC) 체크
 def check_pipc(access_token):
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers, verify=False)
+        response = requests.get(url, headers=headers, verify=False, timeout=10)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
@@ -171,8 +177,7 @@ def check_pipc(access_token):
             if not a_tag:
                 continue
             
-            # 텍스트 추출 후 'N' 마크 및 공백 정제
-            title = a_tag.get_text(strip=True).replace('N', '').strip()
+            title = clean_text(a_tag)
             href = a_tag.get('href', '#')
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
 
@@ -204,8 +209,7 @@ def main():
 
     print("--- 3대 보안 소스 봇 실행 시작 ---")
     
-    # 각 사이트별로 try-except를 완전히 분리하여, 
-    # 한 곳에서 문제가 생겨도 다른 사이트 크롤링은 무조건 실행되도록 보장
+    # 각 사이트별 독립 예외 처리 적용
     try:
         check_kisa(access_token)
     except Exception as e:
