@@ -157,6 +157,7 @@ def check_security_news(access_token):
         print(f"❌ 보안뉴스 확인 중 에러: {e}")
 
 # 3. 개인정보보호위원회(PIPC) 체크
+# 3. 개인정보보호위원회(PIPC) 체크
 def check_pipc(access_token):
     print("🔍 PIPC 함수 진입 시도...")
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
@@ -169,10 +170,10 @@ def check_pipc(access_token):
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
-        print(f"🔍 검색된 게시물 행(tr) 개수: {len(posts)}") # tr 개수가 몇 개 잡히는지 확인
+        print(f"🔍 검색된 게시물 행(tr) 개수: {len(posts)}")
         
         if not posts:
-            print("⚠️ 경고: tbody tr 요소를 찾지 못했습니다. 셀렉터 확인 필요!")
+            print("⚠️ 경고: tbody tr 요소를 찾지 못했습니다.")
             return
 
         last_pipc = ""
@@ -186,7 +187,7 @@ def check_pipc(access_token):
                 continue
             
             title = clean_text(a_tag)
-            print(f"🔍 [디버깅] {idx인덱스 번째 글 제목: {title}") # 첫 번째 글 제목이 뭐로 잡히는지 확인
+            print(f"🔍 [디버깅] {idx}번째 글 제목: {title}")
             
             href = a_tag.get('href', '#')
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
@@ -210,8 +211,7 @@ def check_pipc(access_token):
         else:
             print("ℹ️ 조건에 맞는 새로운 PIPC 게시물 없음")
     except Exception as e:
-        print(f"❌ PIPC 확인 중 에러: {e}")
-        
+        print(f"❌ PIPC 확인 중 에러: {e}")        
 
 def main():
     access_token = get_new_access_token()
