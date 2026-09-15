@@ -18,6 +18,12 @@ NEWS_FILE = "last_news_post.txt"
 PIPC_FILE = "last_pipc_post.txt"
 HISTORY_FILE = "alert_history.txt"
 
+# 공통 브라우저 헤더 (전역 선언)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+}
+
 def get_new_access_token():
     url = "https://kauth.kakao.com/oauth/token"
     data = {
@@ -71,9 +77,8 @@ def log_history(category, title):
 # 1. KISA 가이드라인 체크
 def check_kisa(access_token):
     url = "https://www.kisa.or.kr/2060207"
-    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers, verify=False, timeout=10)
+        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
         
@@ -112,7 +117,7 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (안정적인 최신 리스트 페이지 및 .news_txt 구조로 고정)
+# 2. 보안뉴스 체크 (t_list.asp 및 .news_txt 구조 적용)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
     url = "https://www.boannews.com/media/t_list.asp"
@@ -121,7 +126,6 @@ def check_security_news(access_token):
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 보안뉴스 리스트 페이지의 명확한 기사 텍스트 영역(.news_txt)을 타겟팅
         news_items = soup.select('.news_txt')
         
         if not news_items:
@@ -170,9 +174,8 @@ def check_security_news(access_token):
 def check_pipc(access_token):
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
-    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers, verify=False, timeout=10)
+        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
