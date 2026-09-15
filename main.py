@@ -112,35 +112,19 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (안정적인 a[href*="view.asp"] 구조로 통합 개선)
+# 2. 보안뉴스 체크 (안정적인 최신 리스트 페이지 및 .news_txt 구조로 고정)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    url = "https://www.boannews.com/media/list.asp?kind=1"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    url = "https://www.boannews.com/media/t_list.asp"
     try:
-        response = requests.get(url, headers=headers, verify=False, timeout=10)
+        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 유연하고 확실하게 기사 링크를 수집
-        articles = []
-        for a in soup.select('a[href*="view.asp"]'):
-            title = clean_text(a)
-            href = a.get('href', '')
-            if not title or len(title) < 5:
-                continue
-            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
-            articles.append((title, link))
-
-        # 중복 제거
-        seen_titles = set()
-        unique_articles = []
-        for t, l in articles:
-            if t not in seen_titles:
-                seen_titles.add(t)
-                unique_articles.append((t, l))
-
-        if not unique_articles:
+        # 보안뉴스 리스트 페이지의 명확한 기사 텍스트 영역(.news_txt)을 타겟팅
+        news_items = soup.select('.news_txt')
+        
+        if not news_items:
             print("ℹ️ 보안뉴스 목록을 찾지 못했습니다.")
             return
 
@@ -149,7 +133,18 @@ def check_security_news(access_token):
             with open(NEWS_FILE, "r", encoding="utf-8") as f:
                 last_news = f.read().strip()
 
-        for title, link in unique_articles:
+        for item in news_items:
+            a_tag = item.select_one('a')
+            if not a_tag:
+                continue
+            
+            title = clean_text(a_tag)
+            if not title:
+                continue
+                
+            href = a_tag.get('href', '')
+            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
+
             if title == last_news:
                 print("ℹ️ [보안뉴스] 이미 발송된 최신 기사와 동일하여 메시지를 전송하지 않습니다.")
                 break
