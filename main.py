@@ -202,10 +202,25 @@ def main():
         print("❌ 액세스 토큰 갱신 실패")
         return
 
-    print("--- 3대 보안 소스 봇 실행 시작 (통합 정제 및 링크 최적화 버전) ---")
-    check_kisa(access_token)
-    check_security_news(access_token)
-    check_pipc(access_token)
+    print("--- 3대 보안 소스 봇 실행 시작 ---")
+    
+    # 각 사이트별로 try-except를 완전히 분리하여, 
+    # 한 곳에서 문제가 생겨도 다른 사이트 크롤링은 무조건 실행되도록 보장
+    try:
+        check_kisa(access_token)
+    except Exception as e:
+        print(f"❌ KISA 실행 중 예외 발생: {e}")
+        
+    try:
+        check_security_news(access_token)
+    except Exception as e:
+        print(f"❌ 보안뉴스 실행 중 예외 발생: {e}")
+        
+    try:
+        check_pipc(access_token)
+    except Exception as e:
+        print(f"❌ PIPC 실행 중 예외 발생: {e}")
+        
     print("--- 3대 보안 소스 봇 실행 완료 ---")
 
 if __name__ == "__main__":
