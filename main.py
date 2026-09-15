@@ -93,53 +93,50 @@ def check_kisa(access_token):
         print(f"❌ KISA 확인 중 에러: {e}")
 
 # 2. 보안뉴스 체크 (N 제거 및 정제 적용)
-# 보안뉴스 체크 (최신 URL 및 셀렉터 반영 버전)
+# 보안뉴스 체크 (메인 페이지 및 주요 기사 영역 통합 파싱 버전)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    # 보안뉴스 최신 리스트 페이지 주소로 변경
-    url = "https://www.boannews.com/media/t_list.asp"
+    # 메인 페이지와 리스트 페이지 모두에서 기사를 수집할 수 있도록 메인 URL로 변경하거나 리스트 전체를 포괄
+    url = "https://www.boannews.com/"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     try:
         response = requests.get(url, headers=headers, verify=False)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 보안뉴스 최신 목록 태그 구조(.news_list)
-        news_items = soup.select('.news_list')
-        
+        # 보안뉴스 메인 및 서브 페이지에 존재하는 모든 기사 링크와 텍스트를 포괄적으로 탐색
+        # a 태그 중 기사 링크 패턴(/media/view.asp 등)을 가진 모든 요소를 수집
+        articles = []
+        for a in soup.select('a[href*="view.asp"]'):
+            title = clean_text(a)
+            href = a.get('href', '')
+            if not title or len(title) < 5:  # 너무 짧은 텍스트 제외
+                continue
+            
+            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
+            articles.append((title, link))
+
+        # 중복 제거
+        seen_titles = set()
+        unique_articles = []
+        for t, l in articles:
+            if t not in seen_titles:
+                seen_titles.add(t)
+                unique_articles.append((t, l))
+
         last_news = ""
         if os.path.exists(NEWS_FILE):
             with open(NEWS_FILE, "r", encoding="utf-8") as f:
                 last_news = f.read().strip()
 
-        for item in news_items:
-            # 제목 및 링크가 들어있는 a 태그 추출
-            a_tag = item.select_one('a')
-            if not a_tag:
-                continue
-            
-            # span.news_txt 안의 텍스트가 순수 제목
-            txt_span = item.select_one('span.news_txt')
-            if not txt_span:
-                continue
-                
-            title = clean_text(txt_span)
-            
-            # 상대 경로를 절대 경로로 변환
-            href = a_tag.get('href', '')
-            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
-
-            # 요약 부가 텍스트
-            sub_txt = item.select_one('span.news_sub') # 또는 작성자/요약 영역
-            summary = clean_text(sub_txt) if sub_txt else "상세 내용 및 본문은 원문 링크를 확인해주세요."
-
+        for title, link in unique_articles:
             if title == last_news:
-                break
+                break  # 이미 확인한 최신 기사 만나면 중단
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
             if matched_keyword:
                 header = f"🚨 보안뉴스 [{matched_keyword}]"
-                description = f"{title}\n\n[요약]\n{summary}"
+                description = f"{title}\n\n[상세 내용 및 본문은 원문 링크를 참고하세요]"
                 
                 send_kakao_message(header, description, link, access_token)
                 log_history("보안뉴스", title)
@@ -147,7 +144,7 @@ def check_security_news(access_token):
                 
                 with open(NEWS_FILE, "w", encoding="utf-8") as f:
                     f.write(title)
-                break
+                break  # 한 번에 하나의 가장 최신 매칭 기사만 전송
         else:
             print("ℹ️ 조건에 맞는 새로운 보안뉴스 없음")
     except Exception as e:
