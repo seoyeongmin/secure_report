@@ -74,14 +74,21 @@ def log_history(category, title):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         f.write(log_entry + history_content)
 
-# 1. KISA 가이드라인 체크
+# 1. KISA 가이드라인 체크 (제공해주신 HTML 구조 반영: td.sbj a 및 /포맷 링크 탐색)
 def check_kisa(access_token):
     url = "https://www.kisa.or.kr/2060207"
     try:
         response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
+        response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        posts = soup.select('tbody tr')
         
+        # 실제 HTML 구조인 tbl_board notice 안의 tr들을 탐색
+        posts = soup.select('table.tbl_board.notice tbody tr')
+        
+        if not posts:
+            # 백업용 셀렉터
+            posts = soup.select('tbody tr')
+            
         if not posts:
             print("ℹ️ KISA 게시물 목록을 찾지 못했습니다.")
             return
@@ -92,13 +99,24 @@ def check_kisa(access_token):
                 last_title = f.read().strip()
 
         for row in posts:
-            post = row.select_one('td.left a')
+            # td.sbj 또는 td 내부에 있는 가이드라인 상세 링크 탐색
+            post = row.select_one('td.sbj a') or row.select_one('a')
             if not post:
                 continue
             
             title = clean_text(post)
+            if not title or len(title) < 2:
+                continue
+                
             href = post.get('href', '')
-            link = "https://www.kisa.or.kr" + href if href.startswith('/') else href
+            # 상대 경로가 /로 시작하면 도메인 결합, 아니면 그대로 처리
+            if href.startswith('/'):
+                link = "https://www.kisa.or.kr" + href
+            elif href.startswith('http'):
+                link = href
+            else:
+                link = "https://www.kisa.or.kr/" + href
+
             description = f"{title}"
 
             if title == last_title:
