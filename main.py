@@ -158,32 +158,41 @@ def check_security_news(access_token):
 
 # 3. 개인정보보호위원회(PIPC) 체크
 def check_pipc(access_token):
-    print("🔍 PIPC 함수 진입 시도...") # 이 로그가 찍히는지 확인
+    print("🔍 PIPC 함수 진입 시도...")
     KEYWORDS = ["제재", "통과", "의결", "시행", "부과", "법", "위반", "시행령", "처분"]
     url = "https://pipc.go.kr/np/cop/bbs/selectBoardList.do?bbsId=BS074&mCode=C020010000"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers, verify=False, timeout=10)
-        print(f"🔍 PIPC 응답 코드: {response.status_code}") # 응답이 오는지 확인
+        print(f"🔍 PIPC 응답 코드: {response.status_code}")
+        
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = soup.select('tbody tr')
+        print(f"🔍 검색된 게시물 행(tr) 개수: {len(posts)}") # tr 개수가 몇 개 잡히는지 확인
         
+        if not posts:
+            print("⚠️ 경고: tbody tr 요소를 찾지 못했습니다. 셀렉터 확인 필요!")
+            return
+
         last_pipc = ""
         if os.path.exists(PIPC_FILE):
             with open(PIPC_FILE, "r", encoding="utf-8") as f:
                 last_pipc = f.read().strip()
 
-        for row in posts:
+        for idx, row in enumerate(posts):
             a_tag = row.select_one('td.left a') or row.select_one('a')
             if not a_tag:
                 continue
             
             title = clean_text(a_tag)
+            print(f"🔍 [디버깅] {idx인덱스 번째 글 제목: {title}") # 첫 번째 글 제목이 뭐로 잡히는지 확인
+            
             href = a_tag.get('href', '#')
             link = "https://pipc.go.kr" + href if href.startswith('/') else href
 
             if title == last_pipc:
+                print("ℹ️ 기존에 확인한 마지막 게시물과 일치하여 탐색을 중단합니다.")
                 break
 
             matched_keyword = next((kw for kw in KEYWORDS if kw.lower() in title.lower()), None)
@@ -202,6 +211,7 @@ def check_pipc(access_token):
             print("ℹ️ 조건에 맞는 새로운 PIPC 게시물 없음")
     except Exception as e:
         print(f"❌ PIPC 확인 중 에러: {e}")
+        
 
 def main():
     access_token = get_new_access_token()
