@@ -117,37 +117,47 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (모든 view.asp 링크를 유연하게 수집하는 방식으로 개선)
-# 2. 보안뉴스 체크 (제공해주신 실제 articleList.html 구조 반영 버전)
+# 2. 보안뉴스 체크 (제공해주신 HTML 구조 반영: auto-titles 및 articleView.html?idxno= 탐색)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    # 보내주신 전체 기사 또는 사건사고 리스트 URL 활용
-    url = "https://www.boannews.com/news/articleList.html?view_type=sm"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://www.boannews.com/"
-    }
+    url = "https://www.boannews.com/"
     
     try:
-        response = requests.get(url, headers=headers, verify=False, timeout=15)
+        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # articleList.html 페이지 내 기사 목록 블록(.news_list 또는 기사 제목 링크) 탐색
         articles = []
-        # 기사 목록 영역에 있는 a 태그들 중 기사 상세 페이지로 이어지는 링크 수집
-        for a in soup.select('.news_list a, a[href*="view_no="]'):
-            title = clean_text(a)
-            href = a.get('href', '')
+        # HTML에 명시된 기사 제목 태그(<H2 class="auto-titles...">)를 포함하는 a 태그들을 수집
+        for h2 in soup.select('h2.auto-titles'):
+            a_tag = h2.find_parent('a') or h2.select_one('a')
+            if not a_tag:
+                # h2의 조상 중 a 태그가 있는지 탐색
+                a_tag = h2.find_previous('a', href=True)
+            
+            if not a_tag:
+                continue
+                
+            href = a_tag.get('href', '')
+            if 'articleView.html?idxno=' not in href:
+                continue
+                
+            title = clean_text(h2)
             if not title or len(title) < 5:
                 continue
-            
-            # 상대 경로를 절대 경로로 변환
+                
             link = "https://www.boannews.com/news/" + href if not href.startswith('http') else href
             articles.append((title, link))
+
+        # 혹시 위 방식으로 못 잡을 경우를 대비한 백업 셀렉터 (articleView 링크가 걸린 모든 a 태그 탐색)
+        if not articles:
+            for a in soup.select('a[href*="articleView.html?idxno="]'):
+                title = clean_text(a)
+                href = a.get('href', '')
+                if not title or len(title) < 5:
+                    continue
+                link = "https://www.boannews.com/" + href if not href.startswith('http') else href
+                articles.append((title, link))
 
         # 중복 제거
         seen_titles = set()
@@ -158,7 +168,7 @@ def check_security_news(access_token):
                 unique_articles.append((t, l))
 
         if not unique_articles:
-            print("ℹ️ 보안뉴스 목록을 찾지 못했습니다. (셀렉터 확인 필요)")
+            print("ℹ️ 보안뉴스 목록을 찾지 못했습니다.")
             return
 
         last_news = ""
