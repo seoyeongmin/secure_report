@@ -117,7 +117,7 @@ def check_kisa(access_token):
     except Exception as e:
         print(f"❌ KISA 확인 중 에러: {e}")
 
-# 2. 보안뉴스 체크 (t_list.asp 및 .news_txt 구조 적용)
+# 2. 보안뉴스 체크 (모든 view.asp 링크를 유연하게 수집하는 방식으로 개선)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
     url = "https://www.boannews.com/media/t_list.asp"
@@ -126,9 +126,25 @@ def check_security_news(access_token):
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        news_items = soup.select('.news_txt')
-        
-        if not news_items:
+        # 클래스에 구애받지 않고 페이지 내 모든 기사 링크(view.asp)를 유연하게 수집
+        articles = []
+        for a in soup.select('a[href*="view.asp"]'):
+            title = clean_text(a)
+            href = a.get('href', '')
+            if not title or len(title) < 5:
+                continue
+            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
+            articles.append((title, link))
+
+        # 중복 제거
+        seen_titles = set()
+        unique_articles = []
+        for t, l in articles:
+            if t not in seen_titles:
+                seen_titles.add(t)
+                unique_articles.append((t, l))
+
+        if not unique_articles:
             print("ℹ️ 보안뉴스 목록을 찾지 못했습니다.")
             return
 
@@ -137,18 +153,7 @@ def check_security_news(access_token):
             with open(NEWS_FILE, "r", encoding="utf-8") as f:
                 last_news = f.read().strip()
 
-        for item in news_items:
-            a_tag = item.select_one('a')
-            if not a_tag:
-                continue
-            
-            title = clean_text(a_tag)
-            if not title:
-                continue
-                
-            href = a_tag.get('href', '')
-            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
-
+        for title, link in unique_articles:
             if title == last_news:
                 print("ℹ️ [보안뉴스] 이미 발송된 최신 기사와 동일하여 메시지를 전송하지 않습니다.")
                 break
