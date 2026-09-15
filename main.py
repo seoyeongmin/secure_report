@@ -118,22 +118,35 @@ def check_kisa(access_token):
         print(f"❌ KISA 확인 중 에러: {e}")
 
 # 2. 보안뉴스 체크 (모든 view.asp 링크를 유연하게 수집하는 방식으로 개선)
+# 2. 보안뉴스 체크 (제공해주신 실제 articleList.html 구조 반영 버전)
 def check_security_news(access_token):
     KEYWORDS = ["개인정보 유출", "api key", "협력사", "해킹", "공급망", "ISMS", "ISO", "SOC"]
-    url = "https://www.boannews.com/media/t_list.asp"
+    # 보내주신 전체 기사 또는 사건사고 리스트 URL 활용
+    url = "https://www.boannews.com/news/articleList.html?view_type=sm"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.boannews.com/"
+    }
+    
     try:
-        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
+        response = requests.get(url, headers=headers, verify=False, timeout=15)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 클래스에 구애받지 않고 페이지 내 모든 기사 링크(view.asp)를 유연하게 수집
+        # articleList.html 페이지 내 기사 목록 블록(.news_list 또는 기사 제목 링크) 탐색
         articles = []
-        for a in soup.select('a[href*="view.asp"]'):
+        # 기사 목록 영역에 있는 a 태그들 중 기사 상세 페이지로 이어지는 링크 수집
+        for a in soup.select('.news_list a, a[href*="view_no="]'):
             title = clean_text(a)
             href = a.get('href', '')
             if not title or len(title) < 5:
                 continue
-            link = "https://www.boannews.com/media/" + href if not href.startswith('http') else href
+            
+            # 상대 경로를 절대 경로로 변환
+            link = "https://www.boannews.com/news/" + href if not href.startswith('http') else href
             articles.append((title, link))
 
         # 중복 제거
@@ -145,7 +158,7 @@ def check_security_news(access_token):
                 unique_articles.append((t, l))
 
         if not unique_articles:
-            print("ℹ️ 보안뉴스 목록을 찾지 못했습니다.")
+            print("ℹ️ 보안뉴스 목록을 찾지 못했습니다. (셀렉터 확인 필요)")
             return
 
         last_news = ""
